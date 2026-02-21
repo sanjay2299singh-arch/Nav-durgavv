@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --studio-bg: #F0F2F9; --studio-card: #FFFFFF; --studio-purple: #635BFF;
+      --studio-blue-action: #1A73E8; --studio-orange: #FF8A65; --text-main: #1A1D23;
+      --text-grey: #697386; --radius: 24px; --border: 1px solid rgba(0,0,0,0.05);
+      --success: #28a745;
+    }
+    body { font-family: 'Segoe UI', sans-serif; background: var(--studio-bg); margin: 0; padding-bottom: 110px; color: var(--text-main); }
+    .page { display: none; padding-top: 20px; }
+    .active-page { display: block; }
+    #loginPage { position: fixed; inset: 0; background: var(--studio-bg); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .login-card { background: white; padding: 30px; border-radius: var(--radius); width: 100%; max-width: 350px; text-align: center; box-shadow: 0 10px 40px rgba(0,0,0,0.1); border: var(--border); }
+    .panel-header { padding: 30px 24px 10px; display: flex; justify-content: space-between; align-items: center; }
+    .switcher { background: rgba(99, 91, 255, 0.1); padding: 6px; border-radius: 14px; display: flex; gap: 5px; margin: auto; }
+    .switch-btn { padding: 8px 16px; border-radius: 10px; font-size: 12px; font-weight: 800; cursor: pointer; border: none; transition: 0.3s; color: var(--text-grey); }
+    .switch-btn.active { background: var(--studio-purple); color: white; }
+    .container { max-width: 600px; margin: auto; padding: 0 20px; }
+    .studio-card { background: var(--studio-card); border-radius: var(--radius); padding: 22px; margin-bottom: 16px; border: var(--border); box-shadow: 0 10px 25px rgba(0,0,0,0.02); }
+    .price-list-container { max-height: 400px; overflow-y: auto; }
+    .price-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #F4F7F9; }
+    .price-input { width: 80px; padding: 10px; border: 1px solid #E6E9EF; border-radius: 12px; text-align: center; font-weight: 700; color: var(--studio-purple); background: #F9FAFB; }
+    .fab-button { position: fixed; bottom: 95px; right: 25px; background: var(--studio-blue-action); color: white; border: none; width: 50px; height: 50px; border-radius: 50%; font-size: 24px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+    .add-form-mini { display: none; background: #F9FAFB; padding: 15px; border-radius: 18px; border: 1px dashed #D1D9E2; margin-bottom: 15px; }
+    .mini-input { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #E6E9EF; margin-bottom: 10px; box-sizing: border-box; }
+    .btn-studio { background: var(--studio-purple); color: white; border: none; width: 100%; padding: 18px; border-radius: 16px; font-weight: 700; cursor: pointer; }
+    .bottom-nav { position: fixed; bottom: 20px; left: 20px; right: 20px; background: white; border-radius: 30px; display: flex; justify-content: space-around; padding: 18px; box-shadow: 0 15px 40px rgba(0,0,0,0.1); z-index: 1000; }
+    .nav-icon { font-size: 22px; color: #ADB5BD; cursor: pointer; transition: 0.3s; }
+    .nav-icon.active { color: var(--studio-purple); transform: scale(1.2); }
+    
+    .detail-row { font-size: 12px; color: #555; border-top: 1px dashed #eee; margin-top: 8px; padding-top: 8px; }
+    .detail-item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+
+  <div id="loginPage">
+    <div class="login-card">
+      <h2 id="authTitle" style="color: var(--studio-purple);">Admin Login</h2>
+      <input type="text" id="adminUser" class="mini-input" placeholder="Username">
+      <input type="password" id="adminPassword" class="mini-input" placeholder="Password">
+      <button id="authBtn" class="btn-studio" onclick="handleAuth()">Login</button>
+    </div>
+  </div>
+
+  <div id="adminPanel" style="display: none;">
+    <div class="panel-header">
+      <div class="switcher">
+        <button class="switch-btn active" id="btnFeed" onclick="togglePanel('Feed')">FEED</button>
+        <button class="switch-btn" id="btnAtta" onclick="togglePanel('Atta')">ATTA</button>
+      </div>
+      <button onclick="handleLogout()" style="background:none; border:none; color:var(--text-grey); font-size:12px; cursor:pointer;">Logout</button>
+    </div>
+
+    <div id="pageDash" class="page active-page">
+      <div class="container">
+        <h1 id="displayFactory" style="margin-bottom:20px;">Analytics</h1>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:15px;">
+          <div class="studio-card" style="margin:0;"><span style="font-size:10px; font-weight:800; color:var(--text-grey);">● PAID (CASH)</span><span id="valCash" style="font-size:20px; font-weight:800; display:block;">₹0</span></div>
+          <div class="studio-card" style="margin:0;"><span style="font-size:10px; font-weight:800; color:var(--text-grey);">● UDHAARI</span><span id="valUdhari" style="font-size:20px; font-weight:800; display:block; color:var(--studio-orange)">₹0</span></div>
+        </div>
+        <div class="studio-card">
+           <p style="font-size:12px; font-weight:800; color:var(--text-grey); margin:0 0 10px 0;">RECENT SALES TREND</p>
+           <div style="height: 220px;"><canvas id="cashChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pagePrice" class="page">
+      <div class="container">
+        <h1>Price Master</h1>
+        <div class="studio-card">
+          <div id="miniAddForm" class="add-form-mini">
+            <input type="text" id="pNewName" class="mini-input" placeholder="Item Name">
+            <input type="number" id="pNewPrice" class="mini-input" placeholder="Rate">
+            <button class="btn-studio" style="background:#34C759;" onclick="addNewItemCloud()">Confirm Add</button>
+          </div>
+          <div class="price-list-container" id="masterPriceList"></div>
+          <button class="btn-studio" style="margin-top:15px;" onclick="saveMasterPrices()">Save All Rates</button>
+        </div>
+      </div>
+      <button class="fab-button" onclick="toggleAddForm()">+</button>
+    </div>
+
+    <div id="pageHistory" class="page">
+      <div class="container">
+        <h1>Customer History</h1>
+        <div id="historyList"></div>
+      </div>
+    </div>
+
+    <div id="pageSettings" class="page">
+      <div class="container">
+        <h1>Settings & Stock</h1>
+        <div class="studio-card">
+          <p style="font-size:11px; font-weight:800; color:var(--text-grey);">FACTORY NAME</p>
+          <input type="text" id="setFactoryName" class="mini-input" placeholder="Factory Name">
+          <button class="btn-studio" onclick="saveSettings()">Update Name</button>
+        </div>
+        <div class="studio-card">
+          <p style="font-size:11px; font-weight:800; color:var(--text-grey);">STOCK OUT SUMMARY (TOTAL KG)</p>
+          <div id="stockSummary"></div>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <div class="nav-icon active" onclick="switchPage('pageDash', this)">🏠</div>
+      <div class="nav-icon" onclick="switchPage('pagePrice', this)">💰</div>
+      <div class="nav-icon" onclick="switchPage('pageHistory', this)">📋</div>
+      <div class="nav-icon" onclick="switchPage('pageSettings', this)">⚙️</div>
+    </nav>
+  </div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyD17cAUwrHjZ7YbOlzyNomdloHjhd1AA4A",
+    authDomain: "nav-durga-28b83.firebaseapp.com",
+    databaseURL: "https://nav-durga-28b83-default-rtdb.firebaseio.com",
+    projectId: "nav-durga-28b83",
+    storageBucket: "nav-durga-28b83.firebasestorage.app",
+    messagingSenderId: "632049488389",
+    appId: "1:632049488389:web:4c871ac9900f61acbdc26c"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+
+  let currentPanel = 'Feed', cloudPrices = {}, cloudHistory = [], chart = null;
+
+  // CHECK LOGIN ON LOAD
+  window.onload = function() {
+    if(localStorage.getItem('adminLoggedIn') === 'true') {
+      document.getElementById('loginPage').style.display = 'none';
+      document.getElementById('adminPanel').style.display = 'block';
+      initApp();
+    }
+  };
+
+  function handleAuth() {
+    const user = document.getElementById('adminUser').value;
+    const pass = document.getElementById('adminPassword').value;
+    db.ref('admins/' + user).once('value', snap => {
+      if(snap.exists() && snap.val().password === pass) {
+        localStorage.setItem('adminLoggedIn', 'true'); // SAVE SESSION
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('adminPanel').style.display = 'block';
+        initApp();
+      } else { alert("Access Denied"); }
+    });
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('adminLoggedIn');
+    location.reload();
+  }
+
+  function initApp() {
+    db.ref('factoryName').on('value', snap => { document.getElementById('displayFactory').innerText = snap.val() || "Analytics"; });
+    db.ref('prices').on('value', snap => { cloudPrices = snap.val() || {}; renderPriceList(); });
+    db.ref('history').on('value', snap => { 
+      cloudHistory = snap.val() ? Object.values(snap.val()) : []; 
+      updateUI(); 
+    });
+  }
+
+  function updateUI() {
+    updateDashboard();
+    renderHistory();
+    renderStock();
+  }
+
+  function renderPriceList() {
+    const items = cloudPrices[currentPanel] || {};
+    document.getElementById('masterPriceList').innerHTML = Object.keys(items).map(k => `
+      <div class="price-row"><b>${k}</b><input type="number" class="price-input" data-name="${k}" value="${items[k]}"></div>
+    `).join('');
+  }
+
+  function updateDashboard() {
+    const filtered = cloudHistory.filter(h => h.mode === currentPanel);
+    let cash = 0, udhari = 0, pts = [];
+    filtered.forEach(h => { 
+      let val = parseFloat(h.total || 0);
+      if(h.status === 'Udhaari') udhari += val; else cash += val;
+      pts.push(val);
+    });
+    document.getElementById('valCash').innerText = "₹" + cash.toLocaleString();
+    document.getElementById('valUdhari').innerText = "₹" + udhari.toLocaleString();
+    renderChart(pts.slice(-10));
+  }
+
+  function renderChart(pts) {
+    const ctx = document.getElementById('cashChart').getContext('2d');
+    if(chart) chart.destroy();
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: pts.map((_, i) => i + 1), datasets: [{ data: pts.length ? pts : [0,0], borderColor: '#635BFF', backgroundColor: 'rgba(99, 91, 255, 0.1)', fill: true, tension: 0.4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+    });
+  }
+
+  function renderHistory() {
+    const filtered = cloudHistory.filter(h => h.mode === currentPanel).reverse();
+    document.getElementById('historyList').innerHTML = filtered.map(i => {
+      let itemHtml = i.details ? i.details.map(d => `
+        <div class="detail-item">
+            <span>${d.name} (${d.w}kg @ ₹${d.p})</span>
+            <span>₹${d.total}</span>
+        </div>`).join('') : 'No details';
+
+      return `
+      <div class="studio-card">
+        <div style="display:flex; justify-content:space-between; align-items:start;">
+            <div>
+                <b style="font-size:16px;">${i.name}</b><br>
+                <small style="color:grey">${i.date}</small>
+            </div>
+            <div style="text-align:right">
+                <span style="font-weight:bold; color:${i.status === 'Udhaari' ? 'var(--studio-orange)' : 'var(--success)'}">₹${i.total}</span><br>
+                <small style="font-weight:800; font-size:10px; color:var(--text-grey)">${i.status.toUpperCase()}</small>
+            </div>
+        </div>
+        <div class="detail-row">
+            ${itemHtml}
+            ${i.mode === 'Feed' ? `<div class="detail-item" style="border-top:1px dotted #ccc; margin-top:5px; padding-top:2px;"><span>Pisai (Service)</span><span>₹${i.weight}</span></div>` : ''}
+        </div>
+      </div>`;
+    }).join('') || "No History";
+  }
+
+  function renderStock() {
+    const filtered = cloudHistory.filter(h => h.mode === currentPanel);
+    let stock = {};
+    filtered.forEach(bill => {
+      if(bill.details) bill.details.forEach(item => { stock[item.name] = (stock[item.name] || 0) + parseFloat(item.w || 0); });
+    });
+    document.getElementById('stockSummary').innerHTML = Object.keys(stock).map(k => `
+      <div class="price-row"><b>${k}</b><span style="font-weight:700;">${stock[k].toFixed(1)} kg</span></div>
+    `).join('') || "No stock data.";
+  }
+
+  function togglePanel(type) {
+    currentPanel = type;
+    document.querySelectorAll('.switch-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + type).classList.add('active');
+    renderPriceList(); updateUI();
+  }
+
+  function switchPage(id, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page'));
+    document.querySelectorAll('.nav-icon').forEach(i => i.classList.remove('active'));
+    document.getElementById(id).classList.add('active-page');
+    el.classList.add('active');
+  }
+
+  function toggleAddForm() { let f = document.getElementById('miniAddForm'); f.style.display = (f.style.display === 'block') ? 'none' : 'block'; }
+  
+  function addNewItemCloud() {
+    let n = document.getElementById('pNewName').value;
+    let p = document.getElementById('pNewPrice').value;
+    if(!n || !p) return;
+    db.ref('prices/' + currentPanel + '/' + n).set(p).then(() => {
+      document.getElementById('pNewName').value = '';
+      document.getElementById('pNewPrice').value = '';
+      toggleAddForm();
+    });
+  }
+
+  function saveMasterPrices() {
+    let p = {};
+    document.querySelectorAll('.price-input').forEach(inp => p[inp.dataset.name] = inp.value);
+    db.ref('prices/' + currentPanel).set(p).then(() => alert("Rates Updated!"));
+  }
+
+  function saveSettings() {
+    db.ref('factoryName').set(document.getElementById('setFactoryName').value).then(() => alert("Name Updated!"));
+  }
+</script>
+</body>
+</html>
